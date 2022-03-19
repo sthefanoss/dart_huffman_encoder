@@ -1,13 +1,5 @@
 import 'dart:math';
 
-double evaluateEntropy(List<double> probabilities) {
-  double pSum = probabilities.reduce((sum, p) => sum + p);
-  return probabilities.reduce((sum, p) {
-    final normalizedP = p / pSum;
-    return sum - normalizedP * log(normalizedP) / ln2;
-  });
-}
-
 class InvalidSymbolException implements Exception {}
 
 class Tuple<F, S> {
@@ -26,7 +18,7 @@ class HuffmanDictionary<T> {
 
   final double meanLength;
 
-  double get efficiency => meanLength / dataEntropy;
+  double get efficiency => dataEntropy / meanLength;
 
   final _HuffmanNode<T> root;
 
@@ -50,13 +42,15 @@ class HuffmanDictionary<T> {
     final symbolToCodeMap = <T, String>{};
     final codeToSymbolMap = <String, T>{};
     double meanLength = 0;
+    double entropy = 0;
+    double probabilitySum = input.fold<double>(0, (sum, p) => sum + p.second);
     root.forEachLeafNode((leaf, code) {
+      final normalizedProbability = leaf.frequency / probabilitySum;
       symbolToCodeMap[leaf.value] = code;
       codeToSymbolMap[code] = leaf.value;
-      meanLength += code.length * leaf.frequency;
+      meanLength += code.length * normalizedProbability;
+      entropy -= normalizedProbability * log(normalizedProbability) / ln2;
     });
-    final entropy =
-        evaluateEntropy(input.map<double>((t) => t.second.toDouble()).toList());
 
     return HuffmanDictionary<T>._(
       root: root,
