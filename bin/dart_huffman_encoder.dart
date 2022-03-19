@@ -1,53 +1,5 @@
-import 'dart:math';
-
-import 'huffman.dart';
-
-String intToBinary(int x) {
-  return (x > 1 ? intToBinary(x >> 1) : '') + (x % 2 == 0 ? '0' : '1');
-}
-
-List<T> randomDistribution<T>(List<Tuple<T, num>> tuples, int length,
-    [int? seed]) {
-  final _random = Random(seed);
-  final probabilitySum = tuples.fold<num>(
-    0,
-    (sum, element) => sum + element.second,
-  );
-  final normalizedProbabilities =
-      tuples.map<double>((tuple) => tuple.second / probabilitySum).toList();
-  final accumulativeNormalizedDistribution = <double>[];
-  for (int i = 0; i < normalizedProbabilities.length; i++) {
-    if (i == 0) {
-      accumulativeNormalizedDistribution.add(normalizedProbabilities.first);
-      continue;
-    }
-    accumulativeNormalizedDistribution.add(
-      accumulativeNormalizedDistribution.last + normalizedProbabilities[i],
-    );
-  }
-
-  return List<T>.generate(length, (_) {
-    final _p = _random.nextDouble();
-    for (int i = 0; i < tuples.length - 1; i++) {
-      if (_p > accumulativeNormalizedDistribution[i]) {
-        continue;
-      }
-      return tuples[i].first;
-    }
-    return tuples.last.first;
-  });
-}
-
-List<Tuple<T, double>> histogram<T>(List<T> data) {
-  final dataFrequencies = <T, double>{};
-  for (final element in data) {
-    dataFrequencies[element] = (dataFrequencies[element] ?? 0) + 1;
-  }
-  return dataFrequencies.entries
-      .map<Tuple<T, double>>(
-          (entry) => Tuple<T, double>(entry.key, entry.value / data.length))
-      .toList();
-}
+import 'encoders.dart';
+import 'math.dart';
 
 void main(List<String> arguments) {
   final symbols = [
@@ -59,13 +11,42 @@ void main(List<String> arguments) {
     Tuple(6, .0625),
   ];
 
-  final dictionary = HuffmanDictionary(symbols);
-  print('\n$dictionary\n');
-  for (int i = 1; i < 10; i++) {
-    final randomText = randomDistribution(symbols, i);
-    final encodedText = dictionary.encode(randomText);
-    final decodedText = dictionary.decode(encodedText);
-    print('encodedText:\n$encodedText\ndecodedText:$decodedText\n');
+  final maxValue = symbols.fold<int>(
+    0,
+    (value, current) => value = (current.first > value) ? current.first : value,
+  );
 
+  final binaryDictionary = IntBinaryDictionary(maxValue);
+
+  final huffmanDictionary = HuffmanDictionary(symbols);
+  print('\n$huffmanDictionary\n');
+
+  final randomInput = randomDistribution(symbols, 1000);
+  final encodedInputWithHuffman = huffmanDictionary.encode(randomInput);
+  final encodedInputWithBinary = binaryDictionary.encode(randomInput);
+  final decodedWithHuffman = huffmanDictionary.decode(encodedInputWithHuffman);
+  final decodedWithBinary = binaryDictionary.decode(encodedInputWithBinary);
+  print('input:\n $randomInput\n');
+  print('Output from huffman compression:\n$encodedInputWithHuffman\n');
+  print('Did huffman decode the data same as input?\n'
+      '${listComparator(randomInput, decodedWithHuffman)}\n');
+  print('Output from binary compression:\n$encodedInputWithBinary\n');
+  print('Did binary decode the data same as input?\n'
+      '${listComparator(randomInput, decodedWithBinary)}\n');
+  print('size reduction with huffman compared to binary:'
+      '${(100 * (encodedInputWithBinary.length - encodedInputWithHuffman.length) //
+          / encodedInputWithBinary.length).toStringAsFixed(2)}%');
+}
+
+bool listComparator<T>(List<T> a, List<T> b) {
+  if (a.length != b.length) {
+    print('i fudeu');
+    return false;
   }
+  for (int i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
 }

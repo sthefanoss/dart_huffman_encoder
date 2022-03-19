@@ -1,4 +1,10 @@
 import 'dart:math';
+import 'math.dart';
+
+abstract class Encoder<T> {
+  String encode(List<T> data);
+  List<T> decode(String byteCode);
+}
 
 class InvalidSymbolException implements Exception {}
 
@@ -13,7 +19,39 @@ class Tuple<F, S> {
   String toString() => '($first,$second)';
 }
 
-class HuffmanDictionary<T> {
+class IntBinaryDictionary implements Encoder<int> {
+  final int length;
+
+  IntBinaryDictionary(int maxValue) : length = (log(maxValue) / ln2).ceil();
+
+  @override
+  String encode(List<int> data) {
+    String buffer = '';
+    for (final element in data) {
+      buffer += intToBinary(element).padLeft(length, '0');
+    }
+    return buffer;
+  }
+
+  @override
+  List<int> decode(String byteCode) {
+    final decodedData = <int>[];
+    int position = 0;
+    int dataLength = byteCode.length ~/ length;
+    while (decodedData.length < dataLength) {
+      final buffer = byteCode.substring(
+        position * length,
+        (position + 1) * length,
+      );
+      decodedData.add(binaryToInt(buffer));
+      position++;
+    }
+
+    return decodedData;
+  }
+}
+
+class HuffmanDictionary<T> implements Encoder<T> {
   final double dataEntropy;
 
   final double meanLength;
@@ -77,6 +115,10 @@ class HuffmanDictionary<T> {
       final secondToLast = nodes.removeLast();
       final newBranch = _HuffmanNode<T>.branch(secondToLast, last);
       int i = nodes.indexWhere((v) => v.frequency <= newBranch.frequency);
+      if (i == -1) {
+        nodes.add(newBranch);
+        continue;
+      }
       nodes.insert(i, newBranch);
     }
 
@@ -85,6 +127,7 @@ class HuffmanDictionary<T> {
 
   T? operator [](String key) => _codeToSymbolMap[key];
 
+  @override
   String encode(List<T> data) {
     String buffer = '';
     for (final element in data) {
@@ -93,6 +136,7 @@ class HuffmanDictionary<T> {
     return buffer;
   }
 
+  @override
   List<T> decode(String byteCode) {
     final decodedData = <T>[];
     int bufferStart = 0;
