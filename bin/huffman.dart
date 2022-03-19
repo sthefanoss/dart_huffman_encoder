@@ -1,3 +1,13 @@
+import 'dart:math';
+
+double evaluateEntropy(List<double> probabilities) {
+  double pSum = probabilities.reduce((sum, p) => sum + p);
+  return probabilities.reduce((sum, p) {
+    final normalizedP = p / pSum;
+    return sum - normalizedP * log(normalizedP) / ln2;
+  });
+}
+
 class InvalidSymbolException implements Exception {}
 
 class Tuple<F, S> {
@@ -6,18 +16,55 @@ class Tuple<F, S> {
   final S second;
 
   const Tuple(this.first, this.second);
+
+  @override
+  String toString() => '($first,$second)';
 }
 
 class HuffmanDictionary<T> {
+  final double dataEntropy;
+
+  final double meanLength;
+
+  double get efficiency => meanLength / dataEntropy;
+
   final _HuffmanNode<T> root;
 
-  const HuffmanDictionary._(this.root);
+  final Map<T, String> _symbolToCodeMap;
+
+  final Map<String, T> _codeToSymbolMap;
+
+  const HuffmanDictionary._({
+    required this.root,
+    required Map<T, String> symbolToCodeMap,
+    required Map<String, T> codeToSymbolMap,
+    required this.dataEntropy,
+    required this.meanLength,
+  })  : _symbolToCodeMap = symbolToCodeMap,
+        _codeToSymbolMap = codeToSymbolMap;
 
   factory HuffmanDictionary(List<Tuple<T, num>> input) {
     final sortedInputByFrequency = [...input]..sort(_tupleComparator<T>);
     final inputAsLeaves = sortedInputByFrequency.map(_tupleMapper<T>).toList();
     final root = _findRootByMinimumVariance(inputAsLeaves);
-    return HuffmanDictionary<T>._(root);
+    final symbolToCodeMap = <T, String>{};
+    final codeToSymbolMap = <String, T>{};
+    double meanLength = 0;
+    root.forEachLeafNode((leaf, code) {
+      symbolToCodeMap[leaf.value] = code;
+      codeToSymbolMap[code] = leaf.value;
+      meanLength += code.length * leaf.frequency;
+    });
+    final entropy =
+        evaluateEntropy(input.map<double>((t) => t.second.toDouble()).toList());
+
+    return HuffmanDictionary<T>._(
+      root: root,
+      symbolToCodeMap: symbolToCodeMap,
+      codeToSymbolMap: codeToSymbolMap,
+      dataEntropy: entropy,
+      meanLength: meanLength,
+    );
   }
 
   static int _tupleComparator<T>(Tuple a, Tuple b) {
@@ -42,16 +89,46 @@ class HuffmanDictionary<T> {
     return _HuffmanNode<T>.branch(nodes.first, nodes.last);
   }
 
-  T operator [](String key) {
-    try {
-      return root[key];
-    } catch (_) {
-      throw InvalidSymbolException();
+  T? operator [](String key) => _codeToSymbolMap[key];
+
+  String encode(List<T> data) {
+    String buffer = '';
+    for (final element in data) {
+      buffer += _symbolToCodeMap[element]!;
+    }
+    return buffer;
+  }
+
+  List<T> decode(String byteCode) {
+    final decodedData = <T>[];
+    int bufferStart = 0;
+    int bufferEnd = 1;
+    while (true) {
+      final buffer = byteCode.substring(bufferStart, bufferEnd);
+      final maybeCode = _codeToSymbolMap[buffer];
+      if (maybeCode == null) {
+        bufferEnd++;
+        continue;
+      }
+      decodedData.add(maybeCode);
+      if (bufferEnd == byteCode.length) {
+        return decodedData;
+      }
+      bufferStart = bufferEnd;
+      bufferEnd = bufferStart;
     }
   }
 
   @override
-  String toString() => root.toStringRecursive('');
+  String toString() {
+    return '$runtimeType('
+        '${<String, dynamic>{
+      'table': _codeToSymbolMap,
+      'meanSymbolLength': meanLength,
+      'dataEntropy': dataEntropy,
+      'efficiency': efficiency,
+    }}';
+  }
 }
 
 abstract class _HuffmanNode<T> {
@@ -71,7 +148,10 @@ abstract class _HuffmanNode<T> {
 
   T operator [](String key);
 
-  String toStringRecursive(String carry);
+  void forEachLeafNode(
+    void Function(_HuffmanLeafNode<T> leaf, String code) callback, [
+    String carry = '',
+  ]);
 }
 
 class _HuffmanLeafNode<T> implements _HuffmanNode<T> {
@@ -88,9 +168,11 @@ class _HuffmanLeafNode<T> implements _HuffmanNode<T> {
   }
 
   @override
-  String toStringRecursive(String carry) {
-    return value.toString() + ' | ' + carry;
-  }
+  void forEachLeafNode(
+    void Function(_HuffmanLeafNode<T>, String) callback, [
+    String carry = '',
+  ]) =>
+      callback(this, carry);
 }
 
 class _HuffmanBranchNode<T> implements _HuffmanNode<T> {
@@ -112,9 +194,11 @@ class _HuffmanBranchNode<T> implements _HuffmanNode<T> {
   }
 
   @override
-  String toStringRecursive(String carry) {
-    return leftNode.toStringRecursive(carry + '0') +
-        '\n' +
-        rightNode.toStringRecursive(carry + '1');
+  void forEachLeafNode(
+    void Function(_HuffmanLeafNode<T>, String) callback, [
+    String carry = '',
+  ]) {
+    leftNode.forEachLeafNode(callback, carry + '0');
+    rightNode.forEachLeafNode(callback, carry + '1');
   }
 }
